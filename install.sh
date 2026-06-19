@@ -105,15 +105,15 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
 echo "Downloading $asset from $repo ($version)"
-download "$base_url/$asset" "$tmp_dir/$bin_name"
+download "$base_url/$asset" "$tmp_dir/$asset"
 download "$base_url/checksums.txt" "$tmp_dir/checksums.txt"
 verify_checksum "$asset" "$tmp_dir"
-chmod +x "$tmp_dir/$bin_name"
+chmod +x "$tmp_dir/$asset"
 
 install_dir="$(choose_install_dir)"
 mkdir -p "$install_dir"
 
-if ! mv "$tmp_dir/$bin_name" "$install_dir/$bin_name" 2>/dev/null; then
+if ! mv "$tmp_dir/$asset" "$install_dir/$bin_name" 2>/dev/null; then
   echo "ccpaid install: cannot write to $install_dir" >&2
   echo "Try setting CCPAID_INSTALL_DIR to a writable directory." >&2
   exit 1
