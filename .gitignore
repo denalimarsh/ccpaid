@@ -111,3 +111,11 @@ dist
 
 # TernJS port file
 .tern-port
+
+# ccpaid binary
+ccpaid
+
+# ccpaid / Bun build artifacts
+ccpaid
+*.bun-build
+.*.bun-build
