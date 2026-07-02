@@ -119,3 +119,6 @@ ccpaid
 ccpaid
 *.bun-build
 .*.bun-build
+
+# inseeq fork build output
+ccpaid-inseeq

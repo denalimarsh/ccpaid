@@ -18,6 +18,7 @@ type LocalConfig = {
 type Config = {
   apiKey: string;
   externalProductId?: string;
+  customerId?: string;
   flushMs: number;
   debug: boolean;
   logFile?: string;
@@ -285,6 +286,7 @@ function parseArgs(argv: string[]): Omit<Config, "apiKey"> & { help: boolean; co
 
   const env = process.env;
   let externalProductId = env.PAID_EXTERNAL_PRODUCT_ID;
+  let customerId = env.PAID_CUSTOMER_ID;
   let flushMs = parsePositiveInt(env.CCPAID_FLUSH_MS, 5000);
   let logFile = env.CCPAID_LOG_FILE;
   let debug = parseBooleanEnv(env.CCPAID_DEBUG);
@@ -304,6 +306,10 @@ function parseArgs(argv: string[]): Omit<Config, "apiKey"> & { help: boolean; co
       externalProductId = readFlagValue(ownArgs, ++index, arg);
     } else if (arg.startsWith("--external-product-id=")) {
       externalProductId = arg.slice("--external-product-id=".length);
+    } else if (arg === "--customer-id") {
+      customerId = readFlagValue(ownArgs, ++index, arg);
+    } else if (arg.startsWith("--customer-id=")) {
+      customerId = arg.slice("--customer-id=".length);
     } else if (arg === "--flush-ms") {
       flushMs = parsePositiveInt(readFlagValue(ownArgs, ++index, arg), 5000);
     } else if (arg.startsWith("--flush-ms=")) {
@@ -325,6 +331,7 @@ function parseArgs(argv: string[]): Omit<Config, "apiKey"> & { help: boolean; co
 
   return {
     externalProductId,
+    customerId,
     flushMs,
     debug,
     logFile,
@@ -346,6 +353,7 @@ Usage:
 
 Options:
   --external-product-id <id>  Attach Paid product attribution by external ID.
+  --customer-id <id>          Attribute to a Paid customer by ID (non-interactive; skips picker + metadata prompt).
   --flush-ms <ms>            Batch flush interval. Default: 5000.
   --debug                    Write compact telemetry diagnostics to a log file.
   --log-file <path>          Enable diagnostics logging at the given path.
@@ -354,6 +362,7 @@ Options:
 Environment:
   PAID_API_KEY               Paid API key. Overrides ~/.ccpaid/config.json.
   PAID_EXTERNAL_PRODUCT_ID   Same as --external-product-id.
+  PAID_CUSTOMER_ID           Same as --customer-id.
   CCPAID_FLUSH_MS            Same as --flush-ms.
   CCPAID_DEBUG               Same as --debug when set to 1, true, or yes.
   CCPAID_LOG_FILE            Same as --log-file.
@@ -408,9 +417,21 @@ async function main() {
   });
 
   const client = new PaidClient({ token: config.apiKey });
-  const customers = await listAllCustomers(client, logger);
-  const target = await selectCustomer(customers);
-  const customMetadata = await collectCustomMetadata();
+  // Non-interactive: if a customer is given via flag/env, use it directly and skip the
+  // interactive picker AND the metadata prompt (both require a TTY the launcher inherits).
+  const explicitCustomer: CustomerTarget | undefined = config.customerId
+    ? { customerId: config.customerId }
+    : undefined;
+  let target: CustomerTarget;
+  let customMetadata: CustomMetadata;
+  if (explicitCustomer) {
+    target = explicitCustomer;
+    customMetadata = {};
+  } else {
+    const customers = await listAllCustomers(client, logger);
+    target = await selectCustomer(customers);
+    customMetadata = await collectCustomMetadata();
+  }
   const product = config.externalProductId ? { externalProductId: config.externalProductId } : undefined;
   const queue = new CostQueue(client, logger, summary, config.flushMs);
   const server = createReceiver({ queue, summary, logger, target, product, config, customMetadata });
@@ -452,6 +473,7 @@ async function loadConfig(parsed: Omit<Config, "apiKey"> & { help: boolean; comm
   return {
     apiKey,
     externalProductId: parsed.externalProductId,
+    customerId: parsed.customerId,
     flushMs: parsed.flushMs,
     debug: parsed.debug,
     logFile: parsed.logFile,
